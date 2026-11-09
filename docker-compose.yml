@@ -1,0 +1,52 @@
+# `docker compose up -d` starts the dependencies for local development and
+# tests: PostgreSQL with one database per daemon, and Redpanda, a
+# Kafka-compatible broker that runs as a single small container.
+#
+#   postgres   localhost:5432, databases orders, inventory, payment (+ *_test)
+#   redpanda   Kafka API on localhost:19092 from the host, redpanda:9092
+#              from other containers; admin API on :9644
+#
+# Credentials here are for local use only.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: saga
+      POSTGRES_PASSWORD: saga
+      POSTGRES_DB: orders
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saga -d orders"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
+  redpanda:
