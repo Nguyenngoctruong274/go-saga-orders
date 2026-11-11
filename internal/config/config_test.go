@@ -32,13 +32,14 @@ func TestLoadDefaults(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := Config{
-				Service:         tc.svc,
-				HTTPAddr:        tc.addr,
-				DatabaseURL:     "postgres://saga:saga@localhost:5432/orders",
-				DBMaxConns:      20,
-				KafkaBrokers:    []string{"localhost:19092"},
-				ShutdownTimeout: 15 * time.Second,
-				LogLevel:        slog.LevelInfo,
+				Service:          tc.svc,
+				HTTPAddr:         tc.addr,
+				DatabaseURL:      "postgres://saga:saga@localhost:5432/orders",
+				DBMaxConns:       20,
+				KafkaBrokers:     []string{"localhost:19092"},
+				KafkaReplication: 1,
+				ShutdownTimeout:  15 * time.Second,
+				LogLevel:         slog.LevelInfo,
 			}
 			if !reflect.DeepEqual(cfg, want) {
 				t.Fatalf("got %+v, want %+v", cfg, want)
@@ -49,26 +50,28 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadOverrides(t *testing.T) {
 	cfg, err := load(Payment, envFrom(map[string]string{
-		"SAGA_HTTP_ADDR":        "127.0.0.1:9090",
-		"SAGA_DATABASE_URL":     "postgresql://u:p@db.internal:5433/payment?sslmode=require",
-		"SAGA_DB_MAX_CONNS":     "50",
-		"SAGA_KAFKA_BROKERS":    " redpanda-0:9092, redpanda-1:9092 ,,[::1]:9092",
-		"SAGA_SHUTDOWN_TIMEOUT": "30s",
-		"SAGA_SHUTDOWN_DRAIN":   "5s",
-		"SAGA_LOG_LEVEL":        "DEBUG",
+		"SAGA_HTTP_ADDR":         "127.0.0.1:9090",
+		"SAGA_DATABASE_URL":      "postgresql://u:p@db.internal:5433/payment?sslmode=require",
+		"SAGA_DB_MAX_CONNS":      "50",
+		"SAGA_KAFKA_BROKERS":     " redpanda-0:9092, redpanda-1:9092 ,,[::1]:9092",
+		"SAGA_KAFKA_REPLICATION": "3",
+		"SAGA_SHUTDOWN_TIMEOUT":  "30s",
+		"SAGA_SHUTDOWN_DRAIN":    "5s",
+		"SAGA_LOG_LEVEL":         "DEBUG",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := Config{
-		Service:         Payment,
-		HTTPAddr:        "127.0.0.1:9090",
-		DatabaseURL:     "postgresql://u:p@db.internal:5433/payment?sslmode=require",
-		DBMaxConns:      50,
-		KafkaBrokers:    []string{"redpanda-0:9092", "redpanda-1:9092", "[::1]:9092"},
-		ShutdownTimeout: 30 * time.Second,
-		ShutdownDrain:   5 * time.Second,
-		LogLevel:        slog.LevelDebug,
+		Service:          Payment,
+		HTTPAddr:         "127.0.0.1:9090",
+		DatabaseURL:      "postgresql://u:p@db.internal:5433/payment?sslmode=require",
+		DBMaxConns:       50,
+		KafkaBrokers:     []string{"redpanda-0:9092", "redpanda-1:9092", "[::1]:9092"},
+		KafkaReplication: 3,
+		ShutdownTimeout:  30 * time.Second,
+		ShutdownDrain:    5 * time.Second,
+		LogLevel:         slog.LevelDebug,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("got %+v, want %+v", cfg, want)
@@ -99,6 +102,8 @@ func TestLoadInvalid(t *testing.T) {
 		{"broker port text", with("SAGA_KAFKA_BROKERS", "redpanda:kafka"), "has no valid port"},
 		{"broker port range", with("SAGA_KAFKA_BROKERS", "redpanda:70000"), "has no valid port"},
 		{"one bad broker spoils the list", with("SAGA_KAFKA_BROKERS", "a:9092,b"), `"b" is not a host:port`},
+		{"replication zero", with("SAGA_KAFKA_REPLICATION", "0"), "SAGA_KAFKA_REPLICATION"},
+		{"replication too high", with("SAGA_KAFKA_REPLICATION", "40000"), "SAGA_KAFKA_REPLICATION"},
 		{"shutdown timeout zero", with("SAGA_SHUTDOWN_TIMEOUT", "0"), "SAGA_SHUTDOWN_TIMEOUT"},
 		{"shutdown timeout text", with("SAGA_SHUTDOWN_TIMEOUT", "soon"), "SAGA_SHUTDOWN_TIMEOUT"},
 		{"shutdown drain negative", with("SAGA_SHUTDOWN_DRAIN", "-1s"), "SAGA_SHUTDOWN_DRAIN"},

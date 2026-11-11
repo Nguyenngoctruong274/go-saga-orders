@@ -46,6 +46,9 @@ type Config struct {
 	DBMaxConns int
 	// KafkaBrokers are the bootstrap brokers, as host:port.
 	KafkaBrokers []string
+	// KafkaReplication is the replication factor of the topics ordersd
+	// creates: 1 for a single local broker, 3 in production.
+	KafkaReplication int16
 	// ShutdownTimeout bounds the graceful shutdown of the HTTP server.
 	ShutdownTimeout time.Duration
 	// ShutdownDrain is how long to keep serving with /readyz failing before
@@ -67,12 +70,13 @@ func load(svc Service, getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("unknown service %q", svc)
 	}
 	cfg := Config{
-		Service:         svc,
-		HTTPAddr:        valueOr(getenv("SAGA_HTTP_ADDR"), addr),
-		DatabaseURL:     getenv("SAGA_DATABASE_URL"),
-		DBMaxConns:      20,
-		ShutdownTimeout: 15 * time.Second,
-		LogLevel:        slog.LevelInfo,
+		Service:          svc,
+		HTTPAddr:         valueOr(getenv("SAGA_HTTP_ADDR"), addr),
+		DatabaseURL:      getenv("SAGA_DATABASE_URL"),
+		DBMaxConns:       20,
+		KafkaReplication: 1,
+		ShutdownTimeout:  15 * time.Second,
+		LogLevel:         slog.LevelInfo,
 	}
 
 	var errs []error
@@ -98,6 +102,15 @@ func load(svc Service, getenv func(string) string) (Config, error) {
 		errs = append(errs, err)
 	}
 	cfg.KafkaBrokers = brokers
+
+	if raw := getenv("SAGA_KAFKA_REPLICATION"); raw != "" {
+		n, err := strconv.ParseInt(raw, 10, 16)
+		if err != nil || n < 1 || n > 7 {
+			errs = append(errs, errors.New("SAGA_KAFKA_REPLICATION: must be an integer from 1 to 7"))
+		} else {
+			cfg.KafkaReplication = int16(n) //nolint:gosec // parsed with bitSize 16 and checked to be 1..7
+		}
+	}
 
 	if raw := getenv("SAGA_SHUTDOWN_TIMEOUT"); raw != "" {
 		d, err := time.ParseDuration(raw)
