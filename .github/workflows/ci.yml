@@ -24,7 +24,9 @@ jobs:
       - name: Coverage
         run: go tool cover -func=coverage.out | tail -1
       - name: Fuzz (short)
-        run: go test -run '^$' -fuzz FuzzSagaInvariants -fuzztime 20s ./internal/saga
+        run: |
+          go test -run '^$' -fuzz FuzzSagaInvariants -fuzztime 20s ./internal/saga
+          go test -run '^$' -fuzz FuzzUnmarshal -fuzztime 15s ./internal/message
 
   lint:
     runs-on: ubuntu-latest
